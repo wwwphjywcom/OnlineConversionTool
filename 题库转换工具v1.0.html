@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>题目格式转换器</title>
+    <style>
+        body {
+            font-family: 'Microsoft Yahei', sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .upload-section {
+            border: 2px dashed #4CAF50;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        #file-input {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            left: 0;
+            top: 0;
+        }
+
+        .preview-area {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .download-link {
+            display: block;
+            margin-top: 20px;
+            color: #2196F3;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>题目格式转换器</h2>
+        
+        <div class="upload-section">
+            <p>点击此处上传文件（支持.txt或.csv）</p>
+            <input type="file" id="file-input" accept=".txt,.csv">
+        </div>
+
+        <button onclick="processFile()">开始转换</button>
+        <div id="preview" class="preview-area"></div>
+        <a id="download-link" class="download-link" style="display: none;">点击下载转换结果</a>
+    </div>
+
+    <script>
+        const formatPatterns = {
+            A: /答案\s*：\s*([A-D])[\s\S]*?提示\s*：\s*(.+)/,
+            B: /^(.+?)\tA\. (.+?)\tB\. (.+?)\tC\. (.+?)\tD\. (.+?)\t([A-D])\t(.+)$/m
+        };
+
+        function detectFormat(content) {
+            if (formatPatterns.A.test(content)) return 'A';
+            if (content.includes('\t')) return 'B';
+            return null;
+        }
+
+        function convertAtoB(block) {
+            const lines = block.split('\n').filter(l => l.trim());
+            const question = lines[0].trim();
+            const options = lines.slice(1,5).map(l => l.replace(/^[A-D]\.\s*/, ''));
+            const answer = lines[5].match(/答案\s*：\s*([A-D])/)[1];
+            const hint = lines[6].match(/提示\s*：\s*(.+)/)[1];
+            
+            return `${question}\tA. ${options[0]}\tB. ${options[1]}\tC. ${options[2]}\tD. ${options[3]}\t${answer}\t${hint}`;
+        }
+
+        function convertBtoA(block) {
+            const match = block.match(formatPatterns.B);
+            if (!match) return null;
+            
+            return [
+                match[1].trim(),
+                `A. ${match[2].trim()}`,
+                `B. ${match[3].trim()}`,
+                `C. ${match[4].trim()}`,
+                `D. ${match[5].trim()}`,
+                `答案：${match[6].trim()}`,
+                `提示：${match[7].trim()}`
+            ].join('\n');
+        }
+
+        function processFile() {
+            const fileInput = document.getElementById('file-input');
+            if (!fileInput.files.length) return alert('请先选择文件');
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const format = detectFormat(content);
+                
+                if (!format) return alert('无法识别文件格式');
+                
+                const blocks = content.split(/\n\s*\n/); // 按空行分隔题目
+                let output = [];
+                
+                blocks.forEach(block => {
+                    block = block.trim();
+                    if (!block) return;
+                    
+                    const converted = format === 'A' ? 
+                        convertAtoB(block) : 
+                        convertBtoA(block);
+                        
+                    if (converted) output.push(converted);
+                });
+
+                const outputContent = format === 'A' ? 
+                    output.join('\n') : 
+                    output.join('\n\n');
+                
+                showPreview(outputContent);
+                createDownloadLink(outputContent, format);
+            };
+            
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function showPreview(content) {
+            const preview = document.getElementById('preview');
+            preview.textContent = content.slice(0, 500) + (content.length > 500 ? '...' : '');
+        }
+
+        function createDownloadLink(content, originalFormat) {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.getElementById('download-link');
+            link.href = url;
+            link.download = `converted_${originalFormat === 'A' ? 'B' : 'A'}.txt`;
+            link.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
